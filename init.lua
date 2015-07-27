@@ -3,11 +3,11 @@
 -- bells ring every hour
 -- they ring as many times as a bell ought to
 
-RING_INTERVAL = 3600; --60*60; -- ring each hour
-
-BELL_SAVE_FILE = minetest.get_modpath("bell").."/bell_positions.data";
-
 bell = {};
+
+bell.RING_INTERVAL = 3600; --60*60; -- ring each hour
+
+bell.BELL_SAVE_FILE = minetest.get_worldpath().."/bell_positions.data";
 
 local bell_positions = {};
 
@@ -16,7 +16,7 @@ bell.save_bell_positions = function( player )
   
    str = minetest.serialize( ({ bell_data = bell_positions}) );
 
-   local file, err = io.open( BELL_SAVE_FILE, "wb");
+   local file, err = io.open( bell.BELL_SAVE_FILE, "wb");
    if (err ~= nil) then
       if( player ) then
          minetest.chat_send_player(player:get_player_name(), "Error: Could not save bell data");
@@ -26,7 +26,7 @@ bell.save_bell_positions = function( player )
    file:write( str );
    file:flush();
    file:close();
-   --minetest.chat_send_all("Wrote data to savefile "..tostring( BELL_SAVE_FILE ));
+   --minetest.chat_send_all("Wrote data to savefile "..tostring( bell.BELL_SAVE_FILE ));
 end
 
 
@@ -34,7 +34,7 @@ bell.restore_bell_data = function()
 
    local bell_position_table;
 
-   local file, err = io.open(BELL_SAVE_FILE, "rb");
+   local file, err = io.open(bell.BELL_SAVE_FILE, "rb");
    if (err ~= nil) then
       if( player ) then
          print("Error: Could not open bell data savefile (ignore this message on first start)");
@@ -44,7 +44,7 @@ bell.restore_bell_data = function()
    local str = file:read();
    file:close();
    
-   bell_positions_table = minetest.deserialize( str );
+   local bell_positions_table = minetest.deserialize( str );
    if( bell_positions_table and bell_positions_table.bell_data ) then
      bell_positions = bell_positions_table.bell_data;
      print("[bell] Read positions of bells from savefile.");
@@ -70,14 +70,14 @@ bell.ring_bell = function()
    local sekunde = tonumber( os.date( "%S"));
    local minute  = tonumber( os.date( "%M"));
    local stunde  = tonumber( os.date( "%I")); -- in 12h-format (a bell that rings 24x at once would not survive long...)
-   local delay   = RING_INTERVAL;
+   local delay   = bell.RING_INTERVAL;
  
    --print("[bells]It is now H:"..tostring( stunde ).." M:"..tostring(minute).." S:"..tostring( sekunde ));
 
    --local datum = os.date( "Stunde:%l Minute:%M Sekunde:%S");
    --print('[bells] ringing bells at '..tostring( datum ))
 
-   delay = RING_INTERVAL - sekunde - (minute*60);
+   delay = bell.RING_INTERVAL - sekunde - (minute*60);
 
    -- make sure the bell rings the next hour
    minetest.after( delay, bell.ring_bell );
