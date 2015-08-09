@@ -36,9 +36,7 @@ bell.restore_bell_data = function()
 
    local file, err = io.open(bell.BELL_SAVE_FILE, "rb");
    if (err ~= nil) then
-      if( player ) then
-         print("Error: Could not open bell data savefile (ignore this message on first start)");
-      end
+      print("Error: Could not open bell data savefile (ignore this message on first start)");
       return
    end
    local str = file:read();
