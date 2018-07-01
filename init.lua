@@ -149,3 +149,31 @@ minetest.register_node("bell:bell", {
  
     groups = {cracky=2},
 })
+
+
+minetest.register_node("bell:bell_small", {
+    description = "small bell",
+    node_placement_prediction = "",
+	tiles = {"bell_bell.png"},
+	paramtype = "light",
+	is_ground_content = true,
+    inventory_image = 'bell_bell.png',
+    wield_image = 'bell_bell.png',
+    stack_max = 1,
+	drawtype = "plantlike",
+    on_punch = function (pos,node,puncher)
+        minetest.sound_play( "bell_small",
+           { pos = pos, gain = 1.5, max_hear_distance = 60,});
+	end,
+    groups = {cracky=2},
+})
+
+
+minetest.register_craft({
+	output = "bell:bell_small",
+	recipe = {
+		{"",                  "default:goldblock", ""                 },
+		{"default:goldblock", "default:goldblock", "default:goldblock"},
+		{"default:goldblock", "",                  "default:goldblock"},
+	},
+})
