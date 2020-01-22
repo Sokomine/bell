@@ -32,7 +32,7 @@ end
 
 local save_bell_positions = function()
   
-   str = minetest.serialize( ({ bell_data = bell_positions}) )
+   local str = minetest.serialize( ({ bell_data = bell_positions}) )
 
    local file, err = io.open( BELL_SAVE_FILE, "wb")
    if (err ~= nil) then
