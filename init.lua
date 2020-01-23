@@ -160,33 +160,10 @@ restore_bell_data()
 ---------------------------------------------------------
 --- Node definitions
 
-local bell_def = {
-    description = S("Bell"),
+local bell_base = {
 	paramtype = "light",
+    description = S("Bell"),
     stack_max = 1,
-
-	drawtype = "mesh",
-	mesh = "bell_bell.obj",
-	tiles = {
-		{ name = "bell_hull.png", backface_culling = true }, -- 
-		{ name = "bell_hull.png", backface_culling = true }, -- 
-		{ name = "bell_hull.png", backface_culling = true }, -- 
-		{ name = "default_wood.png", backface_culling = true }, --
-		},
-	collision_box = {
-		type = "fixed",
-		fixed = {
-			{-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
-		},
-	},
-	selection_box = {
-		type = "fixed",
-		fixed = {
-			{-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
-		},
-	},
-	paramtype2 = "facedir",
-
 
     on_punch = function (pos,node,puncher)
         ring_big_bell(pos)
@@ -202,29 +179,24 @@ local bell_def = {
        local found = 0
        -- actually remove the bell from the list
        for i,v in ipairs( bell_positions ) do
-          if( v ~= nil and v.x == pos.x and v.y == pos.y and v.z == pos.z ) then
-             found = i
+          if(v ~= nil and vector.equals(v, pos)) then
+             table.remove( bell_positions, i)
+			 save_bell_positions()
+			 break
           end
        end
-       -- actually remove the bell
-       if( found > 0 ) then
-          table.remove( bell_positions, found )
-          save_bell_positions()
-       end
     end,
- 
+
     groups = {cracky=2},
 }
 
 if minetest.get_modpath("mesecons") then
-	bell_def.mesecons = {
+	bell_base.mesecons = {
 		effector = {
 			action_on = ring_big_bell,
 		}
 	}
 end
-
-minetest.register_node("bell:bell", bell_def)
 
 
 local ring_small_bell = function(pos)
@@ -232,32 +204,11 @@ local ring_small_bell = function(pos)
 		{ pos = pos, gain = 1.5, max_hear_distance = 60,})
 end
 
-local small_bell_def = {
+
+local small_bell_base = {
     description = S("Small bell"),
+	paramtype = "light",
     stack_max = 1,
-
-	drawtype = "mesh",
-	mesh = "bell_small_bell.obj",
-	tiles = {
-		{ name = "bell_hull.png", backface_culling = true }, -- 
-		{ name = "bell_hull.png", backface_culling = true }, -- 
-		{ name = "bell_hull.png", backface_culling = true }, -- 
-		{ name = "default_wood.png", backface_culling = true }, --
-		},
-	collision_box = {
-		type = "fixed",
-		fixed = {
-			{-0.375, -0.25, -0.375, 0.375, 0.5, 0.375},
-		},
-	},
-	selection_box = {
-		type = "fixed",
-		fixed = {
-			{-0.375, -0.25, -0.375, 0.375, 0.5, 0.375},
-		},
-	},
-	paramtype2 = "facedir",
-
     on_punch = function (pos,node,puncher)
         ring_small_bell(pos)
 	end,
@@ -265,14 +216,105 @@ local small_bell_def = {
 }
 
 if minetest.get_modpath("mesecons") then
-	small_bell_def.mesecons = {
+	small_bell_base.mesecons = {
 		effector = {
 			action_on = ring_small_bell,
 		}
 	}
 end
 
-minetest.register_node("bell:bell_small", small_bell_def)
+----------------------------------------------------
+
+if minetest.settings:get_bool("bell_enable_model", true) then
+----------------
+-- Model-type bell
+	local bell_def = {
+		drawtype = "mesh",
+		mesh = "bell_bell.obj",
+		tiles = {
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "default_wood.png", backface_culling = true }, --
+			},
+		collision_box = {
+			type = "fixed",
+			fixed = {
+				{-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+			},
+		},
+		selection_box = {
+			type = "fixed",
+			fixed = {
+				{-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+			},
+		},
+		paramtype2 = "facedir",
+	}
+	
+	for k, v in pairs(bell_base) do
+		bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell", bell_def)
+	
+	local small_bell_def = 
+	{	drawtype = "mesh",
+		mesh = "bell_small_bell.obj",
+		tiles = {
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "default_wood.png", backface_culling = true }, --
+			},
+		collision_box = {
+			type = "fixed",
+			fixed = {
+				{-0.375, -0.25, -0.375, 0.375, 0.5, 0.375},
+			},
+		},
+		selection_box = {
+			type = "fixed",
+			fixed = {
+				{-0.375, -0.25, -0.375, 0.375, 0.5, 0.375},
+			},
+		},
+		paramtype2 = "facedir",
+	}
+	
+	for k, v in pairs(small_bell_base) do
+		small_bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell_small", small_bell_def)
+
+else
+--------------------
+-- Plantlike-type bell
+	local bell_def = {
+		tiles = {"bell_bell.png"},
+		inventory_image = 'bell_bell.png',
+		wield_image = 'bell_bell.png',
+		drawtype = "plantlike",
+	}
+	for k, v in pairs(bell_base) do
+		bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell", bell_def)
+	
+	local small_bell_def = {
+		tiles = {"bell_bell.png"},
+		inventory_image = 'bell_bell.png',
+		wield_image = 'bell_bell.png',
+		drawtype = "plantlike",
+	}
+	for k, v in pairs(small_bell_base) do
+		small_bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell_small", small_bell_def)
+end
 
 ---------------------------------------------------------
 --- Recipes
@@ -287,11 +329,11 @@ if minetest.get_modpath("default") then
 		},
 	})
 	minetest.register_craft({
-			output = "bell:bell",
-			recipe = {
-					{"default:goldblock", "default:goldblock", "default:goldblock"},
-					{"default:goldblock", "default:goldblock", "default:goldblock"},
-					{"default:goldblock", "",                  "default:goldblock"},
-			},
+		output = "bell:bell",
+		recipe = {
+			{"default:goldblock", "default:goldblock", "default:goldblock"},
+			{"default:goldblock", "default:goldblock", "default:goldblock"},
+			{"default:goldblock", "",                  "default:goldblock"},
+		},
 	})
 end

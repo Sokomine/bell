@@ -13,3 +13,5 @@ bell_tolls_at_dusk (Bell tolls at dusk) int 0
 
 #Bell tolls the number of hours (per the real-world server timezone) on the hour
 bell_tolls_at_server_hours (Bell tolls at server hours) bool true
+
+bell_enable_model (Use model-based bell nodes) bool true
