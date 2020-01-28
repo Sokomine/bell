@@ -51,7 +51,7 @@ local restore_bell_data = function()
 
    local file, err = io.open(BELL_SAVE_FILE, "rb")
    if (err ~= nil) then
-      minetest.log("error", "[bell] Could not open bell data savefile (ignore this message on first start)")
+      minetest.log("warning", "[bell] Could not open bell data savefile (ignore this message on first start)")
       return
    end
    local str = file:read()
