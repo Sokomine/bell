@@ -1,4 +1,4 @@
-S = minetest.get_translator("bell")
+local S = minetest.get_translator(minetest.get_current_modname())
 
 -- bell_positions are saved through server restart
 -- bells ring every hour
@@ -334,6 +334,25 @@ if minetest.get_modpath("default") then
 			{"default:goldblock", "default:goldblock", "default:goldblock"},
 			{"default:goldblock", "default:goldblock", "default:goldblock"},
 			{"default:goldblock", "",                  "default:goldblock"},
+		},
+	})
+end
+
+if minetest.get_modpath("mcl_core") then
+	minetest.register_craft({
+		output = "bell:bell_small",
+		recipe = {
+			{"",                  "mcl_core:goldblock", ""                 },
+			{"mcl_core:goldblock", "mcl_core:goldblock", "mcl_core:goldblock"},
+			{"mcl_core:goldblock", "",                  "mcl_core:goldblock"},
+		},
+	})
+	minetest.register_craft({
+		output = "bell:bell",
+		recipe = {
+			{"mcl_core:goldblock", "mcl_core:goldblock", "mcl_core:goldblock"},
+			{"mcl_core:goldblock", "mcl_core:goldblock", "mcl_core:goldblock"},
+			{"mcl_core:goldblock", "",                  "mcl_core:goldblock"},
 		},
 	})
 end
