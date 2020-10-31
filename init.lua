@@ -250,6 +250,14 @@ if minetest.settings:get_bool("bell_enable_model", true) then
 			},
 		},
 		paramtype2 = "facedir",
+        drop = {
+			max_items = 1,
+			items = {
+				{
+					items = {"bell:bell"},
+				},
+			}
+		 }
 	}
 	
 	for k, v in pairs(bell_base) do
@@ -280,6 +288,14 @@ if minetest.settings:get_bool("bell_enable_model", true) then
 			},
 		},
 		paramtype2 = "facedir",
+        drop = {
+			max_items = 1,
+			items = {
+				{
+					items = {"bell:bell_small"},
+				},
+			}
+		 }
 	}
 	
 	for k, v in pairs(small_bell_base) do
