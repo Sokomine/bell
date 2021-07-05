@@ -1,179 +1,374 @@
+local S = minetest.get_translator(minetest.get_current_modname())
 
 -- bell_positions are saved through server restart
 -- bells ring every hour
 -- they ring as many times as a bell ought to
 
-bell = {};
+local RING_INTERVAL = 3600 --60*60 -- ring each hour
 
-bell.RING_INTERVAL = 3600; --60*60; -- ring each hour
+local BELL_SAVE_FILE = minetest.get_worldpath().."/bell_positions.data"
 
-bell.BELL_SAVE_FILE = minetest.get_worldpath().."/bell_positions.data";
+local bell_positions = {}
 
-local bell_positions = {};
-
-
-bell.save_bell_positions = function( player )
-  
-   str = minetest.serialize( ({ bell_data = bell_positions}) );
-
-   local file, err = io.open( bell.BELL_SAVE_FILE, "wb");
-   if (err ~= nil) then
-      if( player ) then
-         minetest.chat_send_player(player:get_player_name(), "Error: Could not save bell data");
-      end
-      return
-   end
-   file:write( str );
-   file:flush();
-   file:close();
-   --minetest.chat_send_all("Wrote data to savefile "..tostring( bell.BELL_SAVE_FILE ));
+local ring_big_bell = function(pos)
+	minetest.sound_play( "bell_bell",
+		{ pos = pos, gain = 1.5, max_hear_distance = 300,})
 end
-
-
-bell.restore_bell_data = function()
-
-   local bell_position_table;
-
-   local file, err = io.open(bell.BELL_SAVE_FILE, "rb");
-   if (err ~= nil) then
-      print("Error: Could not open bell data savefile (ignore this message on first start)");
-      return
-   end
-   local str = file:read();
-   file:close();
-   
-   local bell_positions_table = minetest.deserialize( str );
-   if( bell_positions_table and bell_positions_table.bell_data ) then
-     bell_positions = bell_positions_table.bell_data;
-     print("[bell] Read positions of bells from savefile.");
-   end
-end
-   
-
 -- actually ring the bell
-bell.ring_bell_once = function()
-
+local ring_bell_once = function()
    for i,v in ipairs( bell_positions ) do
--- print("Ringing bell at "..tostring( minetest.pos_to_string( v )));
-      minetest.sound_play( "bell_bell",
-        { pos = v, gain = 1.5, max_hear_distance = 300,});
+      ring_big_bell(v)
    end
 end
 
+local ring_bell_multiple = function(rings)
+	for i=1, rings do
+		minetest.after( (i-1)*5,  ring_bell_once )
+	end
+end
 
+---------------------------------------------------------
+--- Persistence
 
-bell.ring_bell = function()
+local save_bell_positions = function()
+  
+   local str = minetest.serialize( ({ bell_data = bell_positions}) )
+
+   local file, err = io.open( BELL_SAVE_FILE, "wb")
+   if (err ~= nil) then
+      minetest.log("error", "[bell] Could not save bell data")
+      return
+   end
+   file:write( str )
+   file:flush()
+   file:close()
+   --minetest.chat_send_all("Wrote data to savefile "..tostring( BELL_SAVE_FILE ))
+end
+
+local restore_bell_data = function()
+
+   local bell_position_table
+
+   local file, err = io.open(BELL_SAVE_FILE, "rb")
+   if (err ~= nil) then
+      minetest.log("warning", "[bell] Could not open bell data savefile (ignore this message on first start)")
+      return
+   end
+   local str = file:read()
+   file:close()
+   
+   local bell_positions_table = minetest.deserialize( str )
+   if( bell_positions_table and bell_positions_table.bell_data ) then
+     bell_positions = bell_positions_table.bell_data
+     minetest.log("action", "[bell] Read positions of bells from savefile.")
+   end
+end
+
+---------------------------------------------------------
+--- Local time handling
+
+local rings_at_dawn = tonumber(minetest.settings:get("bell_tolls_at_dawn")) or 0
+local rings_at_noon = tonumber(minetest.settings:get("bell_tolls_at_noon")) or 0
+local rings_at_dusk = tonumber(minetest.settings:get("bell_tolls_at_dusk")) or 0
+local rings_at_midnight = tonumber(minetest.settings:get("bell_tolls_at_midnight")) or 0
+
+local ring_at_dawn =     rings_at_dawn > 0
+local ring_at_noon =     rings_at_noon > 0
+local ring_at_dusk =     rings_at_dusk > 0
+local ring_at_midnight = rings_at_midnight > 0
+local local_time = ring_at_dawn or ring_at_noon or ring_at_dusk or ring_at_midnight
+
+local last_timeofday = 0
+local dawn = 0.2 -- day and night in Minetest isn't exactly even
+local noon = 0.5
+local dusk = 0.8
+
+if local_time then
+	minetest.register_globalstep(function(dtime)
+		local timeofday = minetest.get_timeofday()
+		if ring_at_dawn and timeofday >= dawn and last_timeofday < dawn then
+			ring_bell_multiple(rings_at_dawn)
+			last_timeofday = timeofday
+			return
+		end
+		if ring_at_noon and timeofday >= noon and last_timeofday < noon then
+			ring_bell_multiple(rings_at_noon)
+			last_timeofday = timeofday
+			return
+		end
+		if ring_at_dusk and timeofday >= dusk and last_timeofday < dusk then
+			ring_bell_multiple(rings_at_dusk)
+			last_timeofday = timeofday
+			return
+		end
+		if ring_at_midnight and timeofday < last_timeofday then
+			-- day rolled over, it's midnight
+			ring_bell_multiple(rings_at_midnight)
+			last_timeofday = timeofday
+			return
+		end
+		last_timeofday = timeofday
+	end)
+end
+
+---------------------------------------------------------
+--- Global time handling
+
+local global_time = minetest.settings:get_bool("bell_tolls_at_server_hours", true)
+
+local ring_bell
+ring_bell = function()
+	if not global_time then
+		return
+	end
 
    -- figure out if this is the right time to ring
-   local sekunde = tonumber( os.date( "%S"));
-   local minute  = tonumber( os.date( "%M"));
-   local stunde  = tonumber( os.date( "%I")); -- in 12h-format (a bell that rings 24x at once would not survive long...)
-   local delay   = bell.RING_INTERVAL;
+   local sekunde = tonumber( os.date( "%S"))
+   local minute  = tonumber( os.date( "%M"))
+   local stunde  = tonumber( os.date( "%I")) -- in 12h-format (a bell that rings 24x at once would not survive long...)
+   local delay   = RING_INTERVAL
  
-   --print("[bells]It is now H:"..tostring( stunde ).." M:"..tostring(minute).." S:"..tostring( sekunde ));
+   --print("[bells]It is now H:"..tostring( stunde ).." M:"..tostring(minute).." S:"..tostring( sekunde ))
 
-   --local datum = os.date( "Stunde:%l Minute:%M Sekunde:%S");
+   --local datum = os.date( "Stunde:%l Minute:%M Sekunde:%S")
    --print('[bells] ringing bells at '..tostring( datum ))
 
-   delay = bell.RING_INTERVAL - sekunde - (minute*60);
+   delay = RING_INTERVAL - sekunde - (minute*60)
 
    -- make sure the bell rings the next hour
-   minetest.after( delay, bell.ring_bell );
+   minetest.after( delay, ring_bell )
 
    -- if no bells are around then don't ring
    if( bell_positions == nil or #bell_positions < 1 ) then
-      return;
+      return
    end
 
    if( sekunde > 10 ) then
---      print("[bells] Too late. Waiting for "..tostring( delay ).." seconds.");
-      return;
+--      print("[bells] Too late. Waiting for "..tostring( delay ).." seconds.")
+      return
    end
 
    -- ring the bell for each hour once
-   for i=1,stunde do
-     minetest.after( (i-1)*5,  bell.ring_bell_once );
-   end
-
+   ring_bell_multiple(stunde)
 end
 
 -- first call (after the server has been started)
-minetest.after( 10, bell.ring_bell );
+minetest.after( 10, ring_bell )
 -- read data about bell positions
-bell.restore_bell_data();
+restore_bell_data()
 
+---------------------------------------------------------
+--- Node definitions
 
-minetest.register_node("bell:bell", {
-    description = "bell",
-    node_placement_prediction = "",
-	tiles = {"bell_bell.png"},
+local bell_base = {
 	paramtype = "light",
-	is_ground_content = true,
-    inventory_image = 'bell_bell.png',
-    wield_image = 'bell_bell.png',
+    description = S("Bell"),
     stack_max = 1,
-	drawtype = "plantlike",
+
     on_punch = function (pos,node,puncher)
-        minetest.sound_play( "bell_bell",
-           { pos = pos, gain = 1.5, max_hear_distance = 300,});
-	minetest.chat_send_all(puncher:get_player_name().." has rung the bell!")
+        ring_big_bell(pos)
 	end,
 
-    after_place_node = function(pos, placer)
-       if( placer ~= nil ) then
-          minetest.chat_send_all(placer:get_player_name().." has placed a new bell at "..tostring( minetest.pos_to_string( pos )));
-       end
+	on_construct = function(pos)
        -- remember that there is a bell at that position
-       table.insert( bell_positions, pos );
-       bell.save_bell_positions( placer );
-    end,
+       table.insert( bell_positions, pos )
+       save_bell_positions()
+	end,
 
-    after_dig_node = function(pos, oldnode, oldmetadata, digger)
-       if( digger ~= nil ) then
-          minetest.chat_send_all(digger:get_player_name().." has removed the bell at "..tostring( minetest.pos_to_string( pos )));
-       end
-
-       local found = 0;
+	on_destruct = function(pos)
+       local found = 0
        -- actually remove the bell from the list
        for i,v in ipairs( bell_positions ) do
-          if( v ~= nil and v.x == pos.x and v.y == pos.y and v.z == pos.z ) then
-             found = i;
+          if(v ~= nil and vector.equals(v, pos)) then
+             table.remove( bell_positions, i)
+			 save_bell_positions()
+			 break
           end
        end
-       -- actually remove the bell
-       if( found > 0 ) then
-          table.remove( bell_positions, found );
-          bell.save_bell_positions( digger );
-       end
     end,
- 
+
     groups = {cracky=2},
-})
+}
+
+if minetest.get_modpath("mesecons") then
+	bell_base.mesecons = {
+		effector = {
+			action_on = ring_big_bell,
+		}
+	}
+end
 
 
-minetest.register_node("bell:bell_small", {
-    description = "small bell",
-    node_placement_prediction = "",
-	tiles = {"bell_bell.png"},
+local ring_small_bell = function(pos)
+	minetest.sound_play( "bell_small",
+		{ pos = pos, gain = 1.5, max_hear_distance = 60,})
+end
+
+
+local small_bell_base = {
+    description = S("Small bell"),
 	paramtype = "light",
-	is_ground_content = true,
-    inventory_image = 'bell_bell.png',
-    wield_image = 'bell_bell.png',
     stack_max = 1,
-	drawtype = "plantlike",
     on_punch = function (pos,node,puncher)
-        minetest.sound_play( "bell_small",
-           { pos = pos, gain = 1.5, max_hear_distance = 60,});
+        ring_small_bell(pos)
 	end,
     groups = {cracky=2},
-})
+}
 
+if minetest.get_modpath("mesecons") then
+	small_bell_base.mesecons = {
+		effector = {
+			action_on = ring_small_bell,
+		}
+	}
+end
 
-minetest.register_craft({
-	output = "bell:bell_small",
-	recipe = {
-		{"",                  "default:goldblock", ""                 },
-		{"default:goldblock", "default:goldblock", "default:goldblock"},
-		{"default:goldblock", "",                  "default:goldblock"},
-	},
-})
+----------------------------------------------------
+
+if minetest.settings:get_bool("bell_enable_model", true) then
+----------------
+-- Model-type bell
+	local bell_def = {
+		drawtype = "mesh",
+		mesh = "bell_bell.obj",
+		tiles = {
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "default_wood.png", backface_culling = true }, --
+			},
+		collision_box = {
+			type = "fixed",
+			fixed = {
+				{-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+			},
+		},
+		selection_box = {
+			type = "fixed",
+			fixed = {
+				{-0.5, -0.5, -0.5, 0.5, 0.5, 0.5},
+			},
+		},
+		paramtype2 = "facedir",
+        drop = {
+			max_items = 1,
+			items = {
+				{
+					items = {"bell:bell"},
+				},
+			}
+		 }
+	}
+	
+	for k, v in pairs(bell_base) do
+		bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell", bell_def)
+	
+	local small_bell_def = 
+	{	drawtype = "mesh",
+		mesh = "bell_small_bell.obj",
+		tiles = {
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "bell_hull.png", backface_culling = true }, -- 
+			{ name = "default_wood.png", backface_culling = true }, --
+			},
+		collision_box = {
+			type = "fixed",
+			fixed = {
+				{-0.375, -0.25, -0.375, 0.375, 0.5, 0.375},
+			},
+		},
+		selection_box = {
+			type = "fixed",
+			fixed = {
+				{-0.375, -0.25, -0.375, 0.375, 0.5, 0.375},
+			},
+		},
+		paramtype2 = "facedir",
+        drop = {
+			max_items = 1,
+			items = {
+				{
+					items = {"bell:bell_small"},
+				},
+			}
+		 }
+	}
+	
+	for k, v in pairs(small_bell_base) do
+		small_bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell_small", small_bell_def)
+
+else
+--------------------
+-- Plantlike-type bell
+	local bell_def = {
+		tiles = {"bell_bell.png"},
+		inventory_image = 'bell_bell.png',
+		wield_image = 'bell_bell.png',
+		drawtype = "plantlike",
+	}
+	for k, v in pairs(bell_base) do
+		bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell", bell_def)
+	
+	local small_bell_def = {
+		tiles = {"bell_bell.png"},
+		inventory_image = 'bell_bell.png',
+		wield_image = 'bell_bell.png',
+		drawtype = "plantlike",
+	}
+	for k, v in pairs(small_bell_base) do
+		small_bell_def[k] = v
+	end
+	
+	minetest.register_node("bell:bell_small", small_bell_def)
+end
+
+---------------------------------------------------------
+--- Recipes
+
+if minetest.get_modpath("default") then
+	minetest.register_craft({
+		output = "bell:bell_small",
+		recipe = {
+			{"",                  "default:goldblock", ""                 },
+			{"default:goldblock", "default:goldblock", "default:goldblock"},
+			{"default:goldblock", "",                  "default:goldblock"},
+		},
+	})
+	minetest.register_craft({
+		output = "bell:bell",
+		recipe = {
+			{"default:goldblock", "default:goldblock", "default:goldblock"},
+			{"default:goldblock", "default:goldblock", "default:goldblock"},
+			{"default:goldblock", "",                  "default:goldblock"},
+		},
+	})
+end
+
+if minetest.get_modpath("mcl_core") then
+	minetest.register_craft({
+		output = "bell:bell_small",
+		recipe = {
+			{"",                  "mcl_core:goldblock", ""                 },
+			{"mcl_core:goldblock", "mcl_core:goldblock", "mcl_core:goldblock"},
+			{"mcl_core:goldblock", "",                  "mcl_core:goldblock"},
+		},
+	})
+	minetest.register_craft({
+		output = "bell:bell",
+		recipe = {
+			{"mcl_core:goldblock", "mcl_core:goldblock", "mcl_core:goldblock"},
+			{"mcl_core:goldblock", "mcl_core:goldblock", "mcl_core:goldblock"},
+			{"mcl_core:goldblock", "",                  "mcl_core:goldblock"},
+		},
+	})
+end
